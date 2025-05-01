@@ -1,6 +1,6 @@
 // components/CustomCalendar.js
 import React, { useState } from 'react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isWeekend } from 'date-fns';
 
 interface CalendarEvent {
   id: number;
@@ -20,11 +20,17 @@ const CustomCalendar = ({ events = [] }: CustomCalendarProps) => {
   const monthEnd = endOfMonth(currentDate);
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
-  // Get day of week of first day (0 = Sunday, 6 = Saturday)
-  const startDay = getDay(monthStart);
+  // Filter out weekends
+  const weekdaysOnly = days.filter(day => !isWeekend(day));
 
-  // Create array for empty cells at beginning
-  const blanks = Array.from({ length: startDay }, (_, i) =>
+  // Get day of week of first day (1 = Monday, 5 = Friday)
+  // Adjust for weekday-only view (Monday is the first day)
+  const firstWeekdayOfMonth = weekdaysOnly[0];
+  const startDay = getDay(firstWeekdayOfMonth);
+  const adjustedStartDay = startDay === 0 ? 0 : startDay - 1; // Adjust to start from Monday (0)
+
+  // Create array for empty cells at beginning if first day is not Monday
+  const blanks = Array.from({ length: adjustedStartDay }, (_, i) =>
     <td key={`blank-${i}`} className="empty-cell"></td>
   );
 
@@ -35,21 +41,15 @@ const CustomCalendar = ({ events = [] }: CustomCalendarProps) => {
   const handleNextMonth = () => {
     setCurrentDate(addMonths(currentDate, 1));
   };
+
   // Filter events for a specific day
   const getEventsForDay = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    console.log('events', events);
     return events.filter(event => {
       const eventDate = new Date(event.date);
       return format(eventDate, 'yyyy-MM-dd') === dateStr;
     }).slice(0, 5); // Limit to 5 events
   };
-
-  // Generate next month mini calendar
-  const nextMonth = addMonths(currentDate, 1);
-  const nextMonthStart = startOfMonth(nextMonth);
-  const nextMonthEnd = endOfMonth(nextMonth);
-  const nextMonthDays = eachDayOfInterval({ start: nextMonthStart, end: nextMonthEnd });
 
   return (
     <div className="calendar-container">
@@ -58,10 +58,10 @@ const CustomCalendar = ({ events = [] }: CustomCalendarProps) => {
           <h1>{format(currentDate, 'MMMM yyyy')}</h1>
           <div className="calendar-controls">
             <button onClick={handlePrevMonth}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="3" stroke-linecap="butt" stroke-linejoin="arcs"><path d="M15 18l-6-6 6-6" /></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" strokeWidth="3" strokeLinecap="butt" strokeLinejoin="miter"><path d="M15 18l-6-6 6-6" /></svg>
             </button>
             <button onClick={handleNextMonth}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="3" stroke-linecap="butt" stroke-linejoin="arcs"><path d="M9 18l6-6-6-6" /></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" strokeWidth="3" strokeLinecap="butt" strokeLinejoin="miter"><path d="M9 18l6-6-6-6" /></svg>
             </button>
           </div>
         </div>
@@ -69,13 +69,11 @@ const CustomCalendar = ({ events = [] }: CustomCalendarProps) => {
         <table className="calendar-table">
           <thead>
             <tr>
-              <th>Sun</th>
               <th>Mon</th>
               <th>Tue</th>
               <th>Wed</th>
               <th>Thu</th>
               <th>Fri</th>
-              <th>Sat</th>
             </tr>
           </thead>
           <tbody>
@@ -83,7 +81,7 @@ const CustomCalendar = ({ events = [] }: CustomCalendarProps) => {
               let rows: React.ReactElement[] = [];
               let cells = [...blanks];
 
-              days.forEach((day, i) => {
+              weekdaysOnly.forEach((day, i) => {
                 const dayEvents = getEventsForDay(day);
                 const isCurrentMonth = day.getMonth() === currentDate.getMonth();
 
@@ -103,11 +101,11 @@ const CustomCalendar = ({ events = [] }: CustomCalendarProps) => {
                   </td>
                 );
 
-                // If it's Saturday (end of row) or last day of month
-                if ((i + startDay + 1) % 7 === 0 || i === days.length - 1) {
+                // If it's Friday (end of row) or last day of month
+                if ((getDay(day) === 5) || i === weekdaysOnly.length - 1) {
                   // Fill in any remaining cells for the last row
-                  const remainingCells = 7 - cells.length % 7;
-                  if (remainingCells < 7) {
+                  const remainingCells = 5 - cells.length % 5;
+                  if (remainingCells < 5) {
                     for (let j = 0; j < remainingCells; j++) {
                       cells.push(
                         <td key={`end-blank-${j}`} className="empty-cell"></td>
