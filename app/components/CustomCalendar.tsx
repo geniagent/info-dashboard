@@ -1,6 +1,6 @@
 // components/CustomCalendar.js
 import React, { useState } from 'react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isWeekend } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isWeekend, parseISO } from 'date-fns';
 
 interface CalendarEvent {
   id: number;
@@ -11,10 +11,13 @@ interface CalendarEvent {
 
 interface CustomCalendarProps {
   events: CalendarEvent[];
+  onEventUpdate?: (eventId: number, newDate: string) => void;
 }
 
-const CustomCalendar = ({ events = [] }: CustomCalendarProps) => {
+const CustomCalendar = ({ events = [], onEventUpdate }: CustomCalendarProps) => {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [draggedEvent, setDraggedEvent] = useState<CalendarEvent | null>(null);
+  const [dragOverDate, setDragOverDate] = useState<Date | null>(null);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -46,9 +49,47 @@ const CustomCalendar = ({ events = [] }: CustomCalendarProps) => {
   const getEventsForDay = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     return events.filter(event => {
-      const eventDate = new Date(event.date);
+      const eventDate = parseISO(event.date);
       return format(eventDate, 'yyyy-MM-dd') === dateStr;
     }).slice(0, 5); // Limit to 5 events
+  };
+
+  const handleDragStart = (event: React.DragEvent, calendarEvent: CalendarEvent) => {
+    setDraggedEvent(calendarEvent);
+    event.dataTransfer.setData('text/plain', calendarEvent.id.toString());
+    // Add a semi-transparent effect to the dragged element
+    if (event.target instanceof HTMLElement) {
+      event.target.style.opacity = '0.5';
+    }
+  };
+
+  const handleDragEnd = (event: React.DragEvent) => {
+    // Reset opacity
+    if (event.target instanceof HTMLElement) {
+      event.target.style.opacity = '1';
+    }
+    setDraggedEvent(null);
+    setDragOverDate(null);
+  };
+
+  const handleDragOver = (event: React.DragEvent, date: Date) => {
+    event.preventDefault();
+    setDragOverDate(date);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverDate(null);
+  };
+
+  const handleDrop = (event: React.DragEvent, targetDate: Date) => {
+    event.preventDefault();
+    if (draggedEvent && onEventUpdate) {
+      // Ensure we're using the correct date format
+      const newDate = format(targetDate, 'yyyy-MM-dd');
+      onEventUpdate(draggedEvent.id, newDate);
+    }
+    setDraggedEvent(null);
+    setDragOverDate(null);
   };
 
   return (
@@ -84,13 +125,27 @@ const CustomCalendar = ({ events = [] }: CustomCalendarProps) => {
               weekdaysOnly.forEach((day, i) => {
                 const dayEvents = getEventsForDay(day);
                 const isCurrentMonth = day.getMonth() === currentDate.getMonth();
+                const isDragOver = dragOverDate && format(dragOverDate, 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd');
 
                 cells.push(
-                  <td key={day.toString()} className={isCurrentMonth ? 'calendar-day' : 'calendar-day other-month'}>
+                  <td
+                    key={day.toString()}
+                    className={`calendar-day ${isCurrentMonth ? '' : 'other-month'} ${isDragOver ? 'drag-over' : ''}`}
+                    onDragOver={(e) => handleDragOver(e, day)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, day)}
+                  >
                     <div className="day-number">{format(day, 'd')}</div>
                     <div className="day-events">
                       {dayEvents.map((event, idx) => (
-                        <div key={idx} className="event" style={{ backgroundColor: event.color || '#4285f4' }}>
+                        <div
+                          key={idx}
+                          className="event"
+                          style={{ backgroundColor: event.color || '#4285f4' }}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, event)}
+                          onDragEnd={handleDragEnd}
+                        >
                           {event.title}
                         </div>
                       ))}
